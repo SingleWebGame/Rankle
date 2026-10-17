@@ -11,6 +11,7 @@ import { AdInline } from "@/components/ads/AdInline";
 import { AdResponsive } from "@/components/ads/AdResponsive";
 import { ShareCard } from "@/components/ShareCard";
 import { Button } from "@/components/ui/button";
+import { notifyInGame } from "@/lib/notifications";
 import { challenges, categories } from "@/data/challenges";
 import { getRoundSet, scoreRound } from "@/lib/game";
 import { loadStats, recordGame } from "@/lib/storage";
@@ -48,6 +49,8 @@ function formatTime(seconds: number) {
 export function GameClient({ mode, category }: { mode: GameMode; category?: string }) {
   const pool = useMemo(() => getRoundSet(mode, new Date(), category), [mode, category]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const [tutorialReady, setTutorialReady] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const [roundIndex, setRoundIndex] = useState(0);
   const [items, setItems] = useState<Puzzle["items"]>([]);
   const [results, setResults] = useState<RoundResult[]>([]);
@@ -64,16 +67,27 @@ export function GameClient({ mode, category }: { mode: GameMode; category?: stri
   const targetRounds = mode === "survival" || mode === "speed" ? Number.POSITIVE_INFINITY : 5;
 
   useEffect(() => {
+    try {
+      setTutorialOpen(window.localStorage.getItem("rankle-tutorial-seen") !== "true");
+    } catch (error) {
+      console.error("Unable to read saved Rankle tutorial state", error);
+      setTutorialOpen(true);
+    }
+    setTutorialReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!tutorialReady || tutorialOpen) return;
     setItems(shuffleForRound(puzzle, roundIndex));
     setSubmitted(false);
     setRoundStartedAt(Date.now());
-  }, [puzzle, roundIndex]);
+  }, [puzzle, roundIndex, tutorialReady, tutorialOpen]);
 
   useEffect(() => {
-    if (mode !== "speed" || finished) return;
+    if (mode !== "speed" || finished || !tutorialReady || tutorialOpen) return;
     const timer = window.setInterval(() => setRemaining((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
-  }, [mode, finished]);
+  }, [mode, finished, tutorialReady, tutorialOpen]);
 
   const finishGame = useCallback((finalScore: number, finalResults: RoundResult[]) => {
     const completedCategories = Array.from({ length: finalResults.length }, (_, index) => pool[index % pool.length].category);
@@ -106,6 +120,11 @@ export function GameClient({ mode, category }: { mode: GameMode; category?: stri
     setSubmitted(true);
     setResults((previous) => [...previous, round]);
     setScore((previous) => previous + round.score);
+    notifyInGame({
+      type: "quest",
+      title: `${puzzle.category} ranking complete`,
+      description: `+${round.score.toLocaleString()} points`
+    });
     trackEvent("puzzle_submit", { category: puzzle.category, exact: round.exact, score: round.score });
     trackEvent("puzzle_complete", { category: puzzle.category, perfect: round.perfect });
     if (mode === "survival" && !round.perfect) setLives((value) => value - 1);
@@ -132,7 +151,18 @@ export function GameClient({ mode, category }: { mode: GameMode; category?: stri
     trackEvent("game_start", { mode });
   }
 
-  useEffect(() => { trackEvent("game_start", { mode }); }, [mode]);
+  function acknowledgeTutorial() {
+    try {
+      window.localStorage.setItem("rankle-tutorial-seen", "true");
+    } catch (error) {
+      console.error("Unable to save Rankle tutorial state", error);
+    }
+    setTutorialOpen(false);
+  }
+
+  useEffect(() => {
+    if (tutorialReady && !tutorialOpen) trackEvent("game_start", { mode });
+  }, [mode, tutorialReady, tutorialOpen]);
 
   if (finished) return <main className="mx-auto w-full max-w-4xl px-5 pb-28 pt-8 sm:px-8">
     <div className="mb-8 text-center"><div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-[#c6f36b]/10 text-[#c6f36b]"><Trophy /></div>
@@ -155,6 +185,21 @@ export function GameClient({ mode, category }: { mode: GameMode; category?: stri
   const progress = mode === "speed" ? (remaining / 120) * 100 : mode === "survival" ? (lives / 3) * 100 : (roundIndex / 5) * 100;
 
   return <main className="mx-auto w-full max-w-7xl px-5 pb-28 pt-5 sm:px-8 sm:pt-10">
+    {tutorialReady && tutorialOpen && <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/75 p-5 backdrop-blur-sm">
+      <section role="dialog" aria-modal="true" aria-labelledby="tutorial-title" className="my-auto w-full max-w-lg rounded-3xl border border-white/10 bg-[#141720] p-6 shadow-2xl sm:p-8">
+        <p className="text-xs font-bold uppercase tracking-[.2em] text-[#c6f36b]">Quick tutorial</p>
+        <h2 id="tutorial-title" className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">How to play Rankle</h2>
+        <p className="mt-2 text-sm leading-6 text-white/55">Put your instincts to the test in each ranking round.</p>
+        <ol className="mt-6 space-y-4 text-sm leading-6 text-white/75">
+          <li className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#c6f36b]/10 text-xs font-bold text-[#c6f36b]">1</span><span><strong className="text-white">Read the question.</strong> Each round asks you to rank five items by a fact, such as population or distance.</span></li>
+          <li className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#c6f36b]/10 text-xs font-bold text-[#c6f36b]">2</span><span><strong className="text-white">Reorder the cards</strong> from highest to lowest. Drag them into place, or use your keyboard to move them.</span></li>
+          <li className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#c6f36b]/10 text-xs font-bold text-[#c6f36b]">3</span><span><strong className="text-white">Lock in your ranking</strong> to reveal the answers and earn points. Accuracy and speed both count.</span></li>
+        </ol>
+        {mode === "speed" && <p className="mt-5 rounded-xl border border-white/[.08] bg-white/[.03] p-3 text-xs leading-5 text-white/55">Speed mode is timed. The clock starts after you press OK.</p>}
+        {mode === "survival" && <p className="mt-5 rounded-xl border border-white/[.08] bg-white/[.03] p-3 text-xs leading-5 text-white/55">Survival mode: an imperfect round costs a life.</p>}
+        <Button autoFocus onClick={acknowledgeTutorial} className="mt-7 w-full" size="large">OK</Button>
+      </section>
+    </div>}
     <div className="mb-7 flex items-center justify-between">
       <Link href="/" className="focus-ring flex items-center gap-2 rounded-lg text-sm text-white/45 hover:text-white"><ArrowLeft size={16} />Exit game</Link>
       <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[.025] px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-white/65">

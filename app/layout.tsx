@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ConsentManager } from "@/components/ConsentManager";
 import { ThirdPartyScripts } from "@/components/ThirdPartyScripts";
-import { AchievementToast } from "@/components/AchievementToast";
+import { NotificationCenter } from "@/components/NotificationCenter";
 import { VercelAnalytics } from "@/components/VercelAnalytics";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://rankle.game";
@@ -50,7 +50,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <ConsentManager />
         <ThirdPartyScripts />
-        <AchievementToast />
+        <NotificationCenter />
         <VercelAnalytics />
       </body>
     </html>

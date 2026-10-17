@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, Flame, Gamepad2, Layers3 } from "lucide-react";
 import { usePlayerStats } from "@/hooks/usePlayerStats";
+import { InstallAppButton } from "@/components/InstallAppButton";
 
 const links = [
   { href: "/", label: "Play", icon: Gamepad2 },
@@ -29,9 +30,12 @@ export function SiteHeader() {
         </Link>;
       })}
     </nav>
-    <div className="flex items-center gap-2 rounded-full border border-white/[.08] bg-white/[.035] px-3 py-2 text-sm">
-      <Flame size={15} className="text-[#ff9f6b]" aria-hidden="true" /><span className="font-semibold">{stats?.currentStreak ?? 0}</span>
-      <span className="hidden text-white/45 sm:inline">day streak</span>
+    <div className="flex items-center gap-2">
+      <InstallAppButton />
+      <div className="flex items-center gap-2 rounded-full border border-white/[.08] bg-white/[.035] px-3 py-2 text-sm">
+        <Flame size={15} className="text-[#ff9f6b]" aria-hidden="true" /><span className="font-semibold">{stats?.currentStreak ?? 0}</span>
+        <span className="hidden text-white/45 sm:inline">day streak</span>
+      </div>
     </div>
     <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-white/10 bg-[#090b11]/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:hidden">
       {links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={`flex min-w-16 flex-col items-center gap-1 p-2 text-[10px] ${pathname === href ? "text-[#c6f36b]" : "text-white/45"}`}>
